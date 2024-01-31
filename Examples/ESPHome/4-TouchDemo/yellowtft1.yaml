@@ -1,0 +1,163 @@
+#
+# Basic yaml code to get the ESP32-2432S028R display to work in ESPHome.
+#
+# This yaml displays two rectangles acting as binary touch sensors inside of Home Assistant.
+#
+# Written by Jonny Bergdahl
+# - [GitHub](https://github.com/jonnybergdahl)
+# - [Twitter](https://twitter.com/jonnybergdahl)
+# - [YouTube](https://www.youtube.com/jonnybergdahl)
+#
+# ============================================================ 
+# NOTE:
+# In order for this to work you need to add the following settings in your secrets.yaml file:
+# - api_key
+# - ota_password
+# - wifi_ssid
+# - wifi_password
+# - ap_password
+#
+# Create a folder named fonts in your ESPHome folder, and copy the file fonts/Arimo-Regular.ttf there.
+#
+# ============================================================ 
+# Example file setup
+# Change the naming below, they will be the names used in Home Assistant
+#
+substitutions:
+  device_name: yellowtft1
+  friendly_name: Yellow TFT 1
+
+# ============================================================ 
+# Standard ESPHome setup
+#
+# ESPHome naming
+esphome:
+  name: $device_name
+  friendly_name: $friendly_name
+ 
+# The ESP32-2432S028R uses a standard ESP32-WROVER, so we use the esp32dev defintion
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_key
+
+# Set OTA password
+ota:
+  password: !secret ota_password
+
+# Setup WiFi credentials
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: $device_name Fallback Hotspot
+    password: !secret ap_password
+
+captive_portal:
+
+# ============================================================ 
+# ESPHome Display related setup
+#
+# Create a font to use, add and remove glyphs as needed. 
+font:
+  - file: 'fonts/Arimo-Regular.ttf'
+    id: arimo96
+    size: 96
+    glyphs: "AB"
+
+# Create a Home Assistant blue color
+color:
+  - id: ha_blue
+    hex: 51c0f2
+
+# ============================================================ 
+# Home Assistant related setup
+#
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    name: Display Backlight
+    id: backlight
+    restore_mode: ALWAYS_ON
+
+# Setup two binary sensors for the two areas for touch
+binary_sensor:
+  - platform: touchscreen
+    name: Button A
+    x_min: 20
+    x_max: 140
+    y_min: 60
+    y_max: 180
+
+  - platform: touchscreen
+    name: Button B
+    x_min: 180
+    x_max: 300
+    y_min: 60
+    y_max: 180
+
+# ============================================================ 
+# Hardware related setup
+#
+# Setup SPI for the display. The ESP32-2432S028R uses separate SPI buses for display and touch
+spi:
+  - id: tft
+    clk_pin: GPIO14
+    mosi_pin: GPIO13
+    miso_pin: GPIO12
+  - id: touch
+    clk_pin: GPIO25
+    mosi_pin: GPIO32
+    miso_pin: GPIO39
+
+# Setup a pin to control the backlight
+output:
+  - platform: ledc
+    pin: GPIO21
+    id: backlight_pwm
+
+# Setup the ili9xxx platform
+#
+# Display is used as 240x320 by default so we rotate it to 90°
+#
+# We print date and time wth the strftime() function, see the ESPHome documentation to 
+# format date and atime to your locale.
+#
+display:
+  - platform: ili9xxx
+    model: ili9341
+    spi_id: tft
+    cs_pin: GPIO15
+    dc_pin: GPIO2
+    rotation: 90
+    lambda: |-
+      it.fill(id(Color::BLACK));
+      it.filled_rectangle(20, 60, 120, 120, id(ha_blue));
+      it.filled_rectangle(180, 60, 120, 120, id(ha_blue));
+      it.print(80, 120, id(arimo96), TextAlign::CENTER, "A");
+      it.print(240, 120, id(arimo96), TextAlign::CENTER, "B");
+
+# Set up the xpt2046 touch platform
+touchscreen:
+  platform: xpt2046
+  spi_id: touch
+  cs_pin: GPIO33
+  interrupt_pin: GPIO36
+  update_interval: 50ms
+  report_interval: 1s
+  threshold: 400
+  calibration_x_min: 3860
+  calibration_x_max: 280
+  calibration_y_min: 340
+  calibration_y_max: 3860
+  swap_x_y: false      

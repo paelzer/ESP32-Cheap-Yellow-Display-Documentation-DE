@@ -1,0 +1,146 @@
+#
+# Basic yaml code to get the ESP32-2432S028R display to work in ESPHome.
+#
+# This yaml displays the ESPHome logo and the current date and time.
+#
+# Written by Jonny Bergdahl
+# - [GitHub](https://github.com/jonnybergdahl)
+# - [Twitter](https://twitter.com/jonnybergdahl)
+# - [YouTube](https://www.youtube.com/jonnybergdahl)
+#
+# ============================================================ 
+# NOTE:
+# In order for this to work you need to add the following settings in your secrets.yaml file:
+# - api_key
+# - ota_password
+# - wifi_ssid
+# - wifi_password
+# - ap_password
+#
+# Create a folder named fonts in your ESPHome folder, and copy the file fonts/Arimo-Regular.ttf there.
+#
+# ============================================================ 
+# Example file setup
+# Change the naming below, they will be the names used in Home Assistant
+#
+substitutions:
+  device_name: yellowtft1
+  friendly_name: Yellow TFT 1
+
+# ============================================================ 
+# Standard ESPHome setup
+#
+# ESPHome naming
+esphome:
+  name: $device_name
+  friendly_name: $friendly_name
+ 
+# The ESP32-2432S028R uses a standard ESP32-WROVER, so we use the esp32dev defintion
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_key
+
+# Set OTA password
+ota:
+  password: !secret ota_password
+
+# Setup WiFi credentials
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: $device_name Fallback Hotspot
+    password: !secret ap_password
+
+captive_portal:
+
+# ============================================================ 
+# ESPHome Display related setup
+#
+# Create a font to use, add and remove glyphs as needed. 
+font:
+  - file: 'fonts/Arimo-Regular.ttf'
+    id: arimo24
+    size: 24
+    glyphs: "!\"%()+=,-_.:°0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ abcdefghijklmnopqrstuvwxyzåäö"
+  - file: 'fonts/Arimo-Regular.ttf'
+    id: arimo96
+    size: 96
+    glyphs: ":0123456789"
+
+# Create a Home Assistant blue color
+color:
+  - id: ha_blue
+    hex: 51c0f2
+
+# Create an ESPHome logo image
+image:
+  - file: "images/esphome.png"
+    id: esphome_image
+    type: RGB24
+
+# ============================================================ 
+# Home Assistant related setup
+#
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    name: Display Backlight
+    id: backlight
+    restore_mode: ALWAYS_ON
+
+# Create a time sensor, this will fetch time from Home Assistant
+time:
+  - platform: homeassistant
+    id: esptime
+
+# ============================================================ 
+# Hardware related setup
+#
+# Setup SPI for the display. The ESP32-2432S028R uses separate SPI buses for display and touch
+spi:
+  - id: tft
+    clk_pin: GPIO14
+    mosi_pin: GPIO13
+    miso_pin: GPIO12
+  - id: touch
+    clk_pin: GPIO25
+    mosi_pin: GPIO32
+    miso_pin: GPIO39
+
+# Setup a pin to control the backlight
+output:
+  - platform: ledc
+    pin: GPIO21
+    id: backlight_pwm
+
+# Setup the ili9xxx platform
+#
+# Display is used as 240x320 by default so we rotate it to 90°
+#
+# We print date and time wth the strftime() function, see the ESPHome documentation to 
+# format date and atime to your locale.
+#
+display:
+  - platform: ili9xxx
+    model: ili9341
+    spi_id: tft
+    cs_pin: GPIO15
+    dc_pin: GPIO2
+    rotation: 90
+    lambda: |-
+      it.fill(id(ha_blue));
+      it.image(120,10, id(esphome_image));
+      it.strftime(100, 100, id(arimo24), "%Y-%m-%d", id(esptime).now());
+      it.strftime(40, 120, id(arimo96), "%H:%M", id(esptime).now());
